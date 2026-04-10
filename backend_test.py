@@ -1,269 +1,261 @@
 #!/usr/bin/env python3
 """
-Nameh.me Backend Infrastructure Test Suite
-Tests configuration files, Python code structure, and API endpoints (when available)
+Nameh.me Backend API Testing Suite
+Tests all API endpoints with demo credentials and validates responses
 """
 
-import os
+import requests
 import sys
-import yaml
-import toml
-import importlib.util
-from pathlib import Path
+import json
+from datetime import datetime
 
-class NamehInfrastructureTest:
-    def __init__(self):
+class NamehAPITester:
+    def __init__(self, base_url="https://d87fc225-204e-4eef-a790-f719f7a652ee.preview.emergentagent.com"):
+        self.base_url = base_url
+        self.token = None
+        self.user_id = None
         self.tests_run = 0
         self.tests_passed = 0
-        self.issues = []
+        self.demo_email = "demo@nameh.me"
+        self.demo_password = "demo123"
+
+    def log(self, message, status="INFO"):
+        timestamp = datetime.now().strftime("%H:%M:%S")
+        print(f"[{timestamp}] {status}: {message}")
+
+    def run_test(self, name, method, endpoint, expected_status, data=None, headers=None):
+        """Run a single API test"""
+        url = f"{self.base_url}/{endpoint}"
+        test_headers = {'Content-Type': 'application/json'}
         
-    def run_test(self, name, test_func):
-        """Run a single test"""
+        if self.token:
+            test_headers['Authorization'] = f'Bearer {self.token}'
+        if headers:
+            test_headers.update(headers)
+
         self.tests_run += 1
-        print(f"\n🔍 Testing {name}...")
+        self.log(f"Testing {name}...")
         
         try:
-            result = test_func()
-            if result:
+            if method == 'GET':
+                response = requests.get(url, headers=test_headers, timeout=10)
+            elif method == 'POST':
+                response = requests.post(url, json=data, headers=test_headers, timeout=10)
+            elif method == 'PATCH':
+                response = requests.patch(url, json=data, headers=test_headers, timeout=10)
+            elif method == 'DELETE':
+                response = requests.delete(url, headers=test_headers, timeout=10)
+
+            success = response.status_code == expected_status
+            if success:
                 self.tests_passed += 1
-                print(f"✅ Passed")
-                return True
+                self.log(f"✅ {name} - Status: {response.status_code}", "PASS")
+                try:
+                    return True, response.json()
+                except:
+                    return True, {}
             else:
-                print(f"❌ Failed")
-                return False
+                self.log(f"❌ {name} - Expected {expected_status}, got {response.status_code}", "FAIL")
+                try:
+                    error_detail = response.json()
+                    self.log(f"   Error details: {error_detail}", "ERROR")
+                except:
+                    self.log(f"   Response text: {response.text[:200]}", "ERROR")
+                return False, {}
+
+        except requests.exceptions.Timeout:
+            self.log(f"❌ {name} - Request timeout", "FAIL")
+            return False, {}
         except Exception as e:
-            print(f"❌ Failed - Error: {str(e)}")
-            self.issues.append(f"{name}: {str(e)}")
-            return False
-    
-    def test_docker_compose_syntax(self):
-        """Test Docker Compose YAML syntax"""
-        try:
-            with open('/app/docker-compose.yml', 'r') as f:
-                yaml.safe_load(f)
-            with open('/app/docker-compose.override.yml', 'r') as f:
-                yaml.safe_load(f)
-            return True
-        except Exception as e:
-            self.issues.append(f"Docker Compose YAML syntax error: {e}")
-            return False
-    
-    def test_stalwart_config_syntax(self):
-        """Test Stalwart TOML configuration syntax"""
-        try:
-            with open('/app/infrastructure/stalwart/config.toml', 'r') as f:
-                toml.load(f)
-            return True
-        except Exception as e:
-            self.issues.append(f"Stalwart TOML syntax error: {e}")
-            return False
-    
-    def test_traefik_config_syntax(self):
-        """Test Traefik YAML configuration syntax"""
-        try:
-            with open('/app/infrastructure/traefik/traefik.yml', 'r') as f:
-                yaml.safe_load(f)
-            with open('/app/infrastructure/traefik/dynamic/default.yml', 'r') as f:
-                yaml.safe_load(f)
-            return True
-        except Exception as e:
-            self.issues.append(f"Traefik YAML syntax error: {e}")
-            return False
-    
-    def test_backend_python_imports(self):
-        """Test Python backend module imports"""
-        backend_modules = [
-            'app.main',
-            'app.config',
-            'app.database', 
-            'app.models.user',
-            'app.routes.health',
-            'app.routes.auth',
-            'app.routes.users',
-            'app.routes.mail',
-            'app.services.stalwart',
-            'app.utils.security'
-        ]
+            self.log(f"❌ {name} - Error: {str(e)}", "FAIL")
+            return False, {}
+
+    def test_health_endpoints(self):
+        """Test health check endpoints"""
+        self.log("=== Testing Health Endpoints ===")
         
-        # Add backend to Python path
-        sys.path.insert(0, '/app/backend')
+        success, response = self.run_test("Health Check", "GET", "api/health", 200)
+        if success:
+            if response.get("status") == "healthy":
+                self.log("   Health status is healthy", "INFO")
+            else:
+                self.log(f"   Unexpected health status: {response.get('status')}", "WARN")
         
-        failed_imports = []
-        for module in backend_modules:
-            try:
-                __import__(module)
-            except ImportError as e:
-                failed_imports.append(f"{module}: {e}")
-            except Exception:
-                # Expected for database connection issues
-                pass
+        self.run_test("Liveness Check", "GET", "api/health/live", 200)
+
+    def test_auth_endpoints(self):
+        """Test authentication endpoints"""
+        self.log("=== Testing Authentication ===")
         
-        if failed_imports:
-            self.issues.extend(failed_imports)
-            return False
-        return True
-    
-    def test_environment_consistency(self):
-        """Test .env and .env.example consistency"""
-        try:
-            import re
-            
-            with open('/app/.env', 'r') as f:
-                env_content = f.read()
-            with open('/app/.env.example', 'r') as f:
-                env_example_content = f.read()
-            
-            env_vars = set(re.findall(r'^([A-Z_]+)=', env_content, re.MULTILINE))
-            env_example_vars = set(re.findall(r'^([A-Z_]+)=', env_example_content, re.MULTILINE))
-            
-            missing_in_env = env_example_vars - env_vars
-            missing_in_example = env_vars - env_example_vars
-            
-            if missing_in_env or missing_in_example:
-                self.issues.append(f"Environment variable mismatch - missing in .env: {missing_in_env}, missing in .env.example: {missing_in_example}")
-                return False
-            return True
-        except Exception as e:
-            self.issues.append(f"Environment consistency check failed: {e}")
-            return False
-    
-    def test_service_dependencies(self):
-        """Test Docker Compose service dependencies"""
-        try:
-            with open('/app/docker-compose.yml', 'r') as f:
-                compose_data = yaml.safe_load(f)
-            
-            services = compose_data.get('services', {})
-            dependency_issues = []
-            
-            for service_name, service_config in services.items():
-                depends_on = service_config.get('depends_on', {})
-                if isinstance(depends_on, dict):
-                    for dep in depends_on.keys():
-                        if dep not in services:
-                            dependency_issues.append(f"{service_name} depends on missing service {dep}")
-                elif isinstance(depends_on, list):
-                    for dep in depends_on:
-                        if dep not in services:
-                            dependency_issues.append(f"{service_name} depends on missing service {dep}")
-            
-            if dependency_issues:
-                self.issues.extend(dependency_issues)
-                return False
-            return True
-        except Exception as e:
-            self.issues.append(f"Service dependency check failed: {e}")
-            return False
-    
-    def test_required_files_exist(self):
-        """Test that all required files exist"""
-        required_files = [
-            '/app/docker-compose.yml',
-            '/app/docker-compose.override.yml',
-            '/app/.env',
-            '/app/.env.example',
-            '/app/infrastructure/stalwart/config.toml',
-            '/app/infrastructure/postgres/init.sql',
-            '/app/infrastructure/redis/redis.conf',
-            '/app/infrastructure/minio/init.sh',
-            '/app/infrastructure/traefik/traefik.yml',
-            '/app/infrastructure/traefik/dynamic/default.yml',
-            '/app/backend/Dockerfile',
-            '/app/backend/requirements.txt',
-            '/app/backend/app/main.py',
-            '/app/setup.sh',
-            '/app/scripts/health-check.sh',
-            '/app/Makefile',
-            '/app/README.md'
-        ]
+        # Test login with demo credentials
+        success, response = self.run_test(
+            "Demo Login", 
+            "POST", 
+            "api/auth/login", 
+            200,
+            data={"login": self.demo_email, "password": self.demo_password}
+        )
         
-        missing_files = []
-        for file_path in required_files:
-            if not os.path.exists(file_path):
-                missing_files.append(file_path)
-        
-        if missing_files:
-            self.issues.extend([f"Missing file: {f}" for f in missing_files])
-            return False
-        return True
-    
-    def test_dockerfile_structure(self):
-        """Test backend Dockerfile structure"""
-        try:
-            with open('/app/backend/Dockerfile', 'r') as f:
-                dockerfile_content = f.read()
-            
-            required_instructions = ['FROM', 'WORKDIR', 'COPY', 'RUN', 'EXPOSE', 'CMD']
-            missing_instructions = []
-            
-            for instruction in required_instructions:
-                if instruction not in dockerfile_content:
-                    missing_instructions.append(instruction)
-            
-            if missing_instructions:
-                self.issues.append(f"Dockerfile missing instructions: {missing_instructions}")
-                return False
-            return True
-        except Exception as e:
-            self.issues.append(f"Dockerfile validation failed: {e}")
-            return False
-    
-    def test_requirements_txt(self):
-        """Test requirements.txt has essential dependencies"""
-        try:
-            with open('/app/backend/requirements.txt', 'r') as f:
-                requirements = f.read()
-            
-            essential_deps = ['fastapi', 'uvicorn', 'sqlalchemy', 'asyncpg', 'redis', 'httpx', 'pydantic']
-            missing_deps = []
-            
-            for dep in essential_deps:
-                if dep not in requirements.lower():
-                    missing_deps.append(dep)
-            
-            if missing_deps:
-                self.issues.append(f"Missing essential dependencies: {missing_deps}")
-                return False
-            return True
-        except Exception as e:
-            self.issues.append(f"Requirements.txt validation failed: {e}")
-            return False
-    
-    def run_all_tests(self):
-        """Run all infrastructure tests"""
-        print("=== Nameh.me Infrastructure Test Suite ===\n")
-        
-        # File existence tests
-        self.run_test("Required Files Exist", self.test_required_files_exist)
-        
-        # Syntax validation tests
-        self.run_test("Docker Compose YAML Syntax", self.test_docker_compose_syntax)
-        self.run_test("Stalwart TOML Syntax", self.test_stalwart_config_syntax)
-        self.run_test("Traefik YAML Syntax", self.test_traefik_config_syntax)
-        
-        # Python code tests
-        self.run_test("Backend Python Imports", self.test_backend_python_imports)
-        self.run_test("Dockerfile Structure", self.test_dockerfile_structure)
-        self.run_test("Requirements.txt Dependencies", self.test_requirements_txt)
-        
-        # Configuration consistency tests
-        self.run_test("Environment Variable Consistency", self.test_environment_consistency)
-        self.run_test("Service Dependencies", self.test_service_dependencies)
-        
-        # Print results
-        print(f"\n📊 Test Results: {self.tests_passed}/{self.tests_run} passed")
-        
-        if self.issues:
-            print(f"\n❌ Issues Found:")
-            for issue in self.issues:
-                print(f"  - {issue}")
-            return False
+        if success and 'access_token' in response:
+            self.token = response['access_token']
+            self.user_id = response.get('user_id')
+            self.log(f"   Obtained JWT token for user: {response.get('username')}", "INFO")
         else:
-            print(f"\n✅ All infrastructure tests passed!")
-            return True
+            self.log("   Failed to obtain JWT token", "ERROR")
+            return False
+
+        # Test invalid login
+        self.run_test(
+            "Invalid Login", 
+            "POST", 
+            "api/auth/login", 
+            401,
+            data={"login": "invalid@test.com", "password": "wrongpass"}
+        )
+
+        # Test registration with new user
+        test_email = f"test_{datetime.now().strftime('%H%M%S')}@nameh.me"
+        success, reg_response = self.run_test(
+            "User Registration", 
+            "POST", 
+            "api/auth/register", 
+            200,
+            data={
+                "email": test_email,
+                "username": f"testuser_{datetime.now().strftime('%H%M%S')}",
+                "password": "TestPass123!",
+                "display_name": "Test User"
+            }
+        )
+        
+        if success and 'access_token' in reg_response:
+            self.log(f"   Registration successful for: {test_email}", "INFO")
+        
+        return True
+
+    def test_user_endpoints(self):
+        """Test user profile endpoints"""
+        self.log("=== Testing User Endpoints ===")
+        
+        if not self.token:
+            self.log("No auth token available, skipping user tests", "SKIP")
+            return False
+
+        # Test get profile
+        success, profile = self.run_test("Get User Profile", "GET", "api/users/me", 200)
+        if success:
+            self.log(f"   Profile: {profile.get('email')} ({profile.get('display_name')})", "INFO")
+
+        # Test update profile
+        self.run_test(
+            "Update Profile", 
+            "PATCH", 
+            "api/users/me", 
+            200,
+            data={"display_name": "Updated Demo User"}
+        )
+        
+        return True
+
+    def test_mail_endpoints(self):
+        """Test mail-related endpoints"""
+        self.log("=== Testing Mail Endpoints ===")
+        
+        if not self.token:
+            self.log("No auth token available, skipping mail tests", "SKIP")
+            return False
+
+        # Test get folders
+        success, folders_data = self.run_test("Get Mail Folders", "GET", "api/mail/folders", 200)
+        if success and 'folders' in folders_data:
+            folder_names = [f['name'] for f in folders_data['folders']]
+            self.log(f"   Available folders: {folder_names}", "INFO")
+            
+            # Check for expected folders
+            expected_folders = ['inbox', 'sent', 'drafts', 'trash', 'spam']
+            for folder in expected_folders:
+                if folder in folder_names:
+                    folder_info = next(f for f in folders_data['folders'] if f['name'] == folder)
+                    self.log(f"   {folder}: {folder_info['total']} total, {folder_info['unread']} unread", "INFO")
+
+        # Test get inbox emails
+        success, emails_data = self.run_test("Get Inbox Emails", "GET", "api/mail/emails?folder=inbox", 200)
+        email_id = None
+        if success and 'emails' in emails_data:
+            emails = emails_data['emails']
+            self.log(f"   Found {len(emails)} emails in inbox", "INFO")
+            if emails:
+                email_id = emails[0]['id']
+                self.log(f"   First email: '{emails[0]['subject']}'", "INFO")
+
+        # Test get specific email
+        if email_id:
+            success, email_detail = self.run_test(f"Get Email Details", "GET", f"api/mail/emails/{email_id}", 200)
+            if success:
+                self.log(f"   Email body length: {len(email_detail.get('body', ''))}", "INFO")
+
+        # Test email actions
+        if email_id:
+            self.run_test("Star Email", "POST", f"api/mail/emails/{email_id}/action", 200, 
+                         data={"action": "star"})
+            self.run_test("Unstar Email", "POST", f"api/mail/emails/{email_id}/action", 200, 
+                         data={"action": "unstar"})
+            self.run_test("Mark Read", "POST", f"api/mail/emails/{email_id}/action", 200, 
+                         data={"action": "read"})
+
+        # Test other folders
+        for folder in ['sent', 'drafts', 'spam']:
+            self.run_test(f"Get {folder.title()} Emails", "GET", f"api/mail/emails?folder={folder}", 200)
+
+        # Test search functionality
+        self.run_test("Search Emails", "GET", "api/mail/emails?folder=inbox&search=welcome", 200)
+
+        # Test compose email
+        success, compose_result = self.run_test(
+            "Compose Email", 
+            "POST", 
+            "api/mail/compose", 
+            200,
+            data={
+                "to": ["test@example.com"],
+                "subject": "Test Email from API",
+                "body": "<p>This is a test email sent via API.</p>",
+                "folder": "sent"
+            }
+        )
+        if success:
+            self.log(f"   Composed email ID: {compose_result.get('id')}", "INFO")
+
+        # Test mail status
+        self.run_test("Mail Status", "GET", "api/mail/status", 200)
+        
+        return True
+
+    def run_all_tests(self):
+        """Run all test suites"""
+        self.log("Starting Nameh.me API Test Suite")
+        self.log(f"Testing against: {self.base_url}")
+        
+        # Run test suites
+        self.test_health_endpoints()
+        
+        if self.test_auth_endpoints():
+            self.test_user_endpoints()
+            self.test_mail_endpoints()
+        else:
+            self.log("Authentication failed, skipping authenticated tests", "ERROR")
+
+        # Print final results
+        self.log("=== Test Results ===")
+        self.log(f"Tests run: {self.tests_run}")
+        self.log(f"Tests passed: {self.tests_passed}")
+        self.log(f"Tests failed: {self.tests_run - self.tests_passed}")
+        self.log(f"Success rate: {(self.tests_passed/self.tests_run*100):.1f}%")
+        
+        return self.tests_passed == self.tests_run
 
 def main():
-    tester = NamehInfrastructureTest()
+    tester = NamehAPITester()
     success = tester.run_all_tests()
     return 0 if success else 1
 

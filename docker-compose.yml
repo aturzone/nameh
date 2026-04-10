@@ -289,6 +289,28 @@ services:
       - "traefik.http.services.backend.loadbalancer.server.port=8000"
 
   # ═══════════════════════════════════════════════
+  #  FRONTEND — React Email Client
+  #  Access: http://localhost (via Traefik)
+  #  Direct: http://localhost:3000 (override)
+  # ═══════════════════════════════════════════════
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: nameh-frontend
+    restart: unless-stopped
+    depends_on:
+      - backend
+    networks:
+      - nameh-net
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.frontend.rule=Host(`${DOMAIN:-localhost}`)"
+      - "traefik.http.routers.frontend.entrypoints=web"
+      - "traefik.http.services.frontend.loadbalancer.server.port=80"
+      - "traefik.http.routers.frontend.priority=1"
+
+  # ═══════════════════════════════════════════════
   #  STALWART INIT — Post-boot Configuration
   #  Configures domains and initial accounts
   # ═══════════════════════════════════════════════
