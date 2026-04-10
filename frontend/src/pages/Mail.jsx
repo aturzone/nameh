@@ -15,6 +15,7 @@ export default function Mail() {
   const [labels, setLabels] = useState([]);
   const [activeFolder, setActiveFolder] = useState('inbox');
   const [activeCategory, setActiveCategory] = useState('');
+  const [activeLabel, setActiveLabel] = useState('');
   const [emails, setEmails] = useState([]);
   const [selectedId, setSelectedId] = useState(null);
   const [selectedEmail, setSelectedEmail] = useState(null);
@@ -23,171 +24,153 @@ export default function Mail() {
   const [replyTo, setReplyTo] = useState(null);
   const [selectedIds, setSelectedIds] = useState(new Set());
   const [showSettings, setShowSettings] = useState(false);
-  const emailCache = useRef(new Map());
+  const cache = useRef({});
 
-  const loadFolders = useCallback(async () => {
-    try { const d = await api.get('/api/mail/folders'); setFolders(d.folders); } catch {}
+  // Load all data on mount
+  useEffect(() => {
+    api.get('/api/mail/folders').then(d => setFolders(d.folders)).catch(() => {});
+    api.get('/api/mail/labels').then(d => setLabels(d.labels)).catch(() => {});
+    // Preload all folders
+    ['inbox','sent','drafts','trash','spam','starred'].forEach(f => {
+      api.get(`/api/mail/emails?folder=${f}`).then(d => { cache.current[f] = d.emails; }).catch(() => {});
+    });
   }, []);
 
-  const loadLabels = useCallback(async () => {
-    try { const d = await api.get('/api/mail/labels'); setLabels(d.labels); } catch {}
-  }, []);
-
-  const loadEmails = useCallback(async () => {
+  const loadEmails = useCallback(() => {
     const catQ = activeCategory ? `&category=${activeCategory}` : '';
     const searchQ = search ? `&search=${encodeURIComponent(search)}` : '';
     const key = `${activeFolder}${catQ}${searchQ}`;
-    const cached = emailCache.current.get(key);
-    if (cached) setEmails(cached);
-    try {
-      const d = await api.get(`/api/mail/emails?folder=${activeFolder}${catQ}${searchQ}`);
-      setEmails(d.emails);
-      emailCache.current.set(key, d.emails);
-    } catch {}
-  }, [activeFolder, activeCategory, search]);
+    // Show cached instantly
+    if (cache.current[key]) setEmails(cache.current[key]);
+    api.get(`/api/mail/emails?folder=${activeFolder}${catQ}${searchQ}`).then(d => {
+      cache.current[key] = d.emails;
+      // Filter by label client-side if label is active
+      let filtered = d.emails;
+      if (activeLabel) {
+        filtered = filtered.filter(e => (e.labels || []).includes(activeLabel));
+      }
+      setEmails(filtered);
+    }).catch(() => {});
+  }, [activeFolder, activeCategory, search, activeLabel]);
 
-  useEffect(() => { loadFolders(); loadLabels(); }, [loadFolders, loadLabels]);
-  useEffect(() => { loadEmails(); setSelectedId(null); setSelectedEmail(null); setSelectedIds(new Set()); }, [loadEmails]);
+  useEffect(() => {
+    setSelectedId(null);
+    setSelectedEmail(null);
+    setSelectedIds(new Set());
+    // Instant switch from cache
+    const key = activeFolder;
+    if (cache.current[key] && !search && !activeCategory) {
+      let filtered = cache.current[key];
+      if (activeLabel) filtered = filtered.filter(e => (e.labels || []).includes(activeLabel));
+      setEmails(filtered);
+    }
+    loadEmails();
+  }, [activeFolder, activeCategory, search, activeLabel, loadEmails]);
+
+  const refreshFolders = () => api.get('/api/mail/folders').then(d => setFolders(d.folders)).catch(() => {});
 
   // Keyboard shortcuts
   useEffect(() => {
-    const handler = (e) => {
-      if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.isContentEditable) return;
+    const h = (e) => {
+      if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
       if (showCompose || showSettings) return;
       const idx = emails.findIndex(em => em.id === selectedId);
       switch (e.key) {
         case 'j': case 'ArrowDown': e.preventDefault(); if (idx < emails.length - 1) openEmail(emails[idx + 1].id); else if (idx === -1 && emails.length) openEmail(emails[0].id); break;
         case 'k': case 'ArrowUp': e.preventDefault(); if (idx > 0) openEmail(emails[idx - 1].id); break;
-        case 'Enter': case 'o': if (selectedId && !selectedEmail) { e.preventDefault(); openEmail(selectedId); } break;
         case 's': if (selectedId) { e.preventDefault(); handleAction(selectedId, selectedEmail?.is_starred ? 'unstar' : 'star'); } break;
         case 'e': if (selectedId) { e.preventDefault(); handleAction(selectedId, 'move', 'archive'); toast(t('archive')); } break;
         case '#': if (selectedId) { e.preventDefault(); handleDelete(selectedId); } break;
         case 'r': if (selectedEmail) { e.preventDefault(); handleReply(selectedEmail); } break;
         case 'c': e.preventDefault(); setReplyTo(null); setShowCompose(true); break;
         case '/': e.preventDefault(); document.querySelector('[data-testid="search-input"]')?.focus(); break;
-        case 'Escape': e.preventDefault(); setSelectedId(null); setSelectedEmail(null); setShowCompose(false); setShowSettings(false); break;
+        case 'Escape': setSelectedId(null); setSelectedEmail(null); setShowCompose(false); setShowSettings(false); break;
         default: break;
       }
     };
-    window.addEventListener('keydown', handler);
-    return () => window.removeEventListener('keydown', handler);
+    window.addEventListener('keydown', h);
+    return () => window.removeEventListener('keydown', h);
   }, [emails, selectedId, selectedEmail, showCompose, showSettings]);
 
-  const openEmail = async (id) => {
+  const openEmail = (id) => {
     setSelectedId(id);
-    const em = emails.find(e => e.id === id);
-    if (em) setEmails(prev => prev.map(e => e.id === id ? { ...e, is_read: true } : e));
-    try {
-      const d = await api.get(`/api/mail/emails/${id}`);
-      setSelectedEmail(d);
-      loadFolders();
-    } catch {}
+    // Optimistic read
+    setEmails(p => p.map(e => e.id === id ? { ...e, is_read: true } : e));
+    api.get(`/api/mail/emails/${id}`).then(d => { setSelectedEmail(d); refreshFolders(); }).catch(() => {});
   };
 
-  const handleAction = async (id, action, target) => {
-    setEmails(prev => prev.map(e => {
-      if (e.id !== id) return e;
-      if (action === 'star') return { ...e, is_starred: true };
-      if (action === 'unstar') return { ...e, is_starred: false };
-      if (action === 'read') return { ...e, is_read: true };
-      if (action === 'unread') return { ...e, is_read: false };
-      return e;
-    }));
-    if (['trash', 'spam', 'move'].includes(action)) {
-      setEmails(prev => prev.filter(e => e.id !== id));
-      if (id === selectedId) { setSelectedId(null); setSelectedEmail(null); }
-    }
+  const handleAction = (id, action, target) => {
+    // Optimistic update
+    setEmails(p => {
+      let next = p;
+      if (action === 'star') next = p.map(e => e.id === id ? { ...e, is_starred: true } : e);
+      else if (action === 'unstar') next = p.map(e => e.id === id ? { ...e, is_starred: false } : e);
+      else if (action === 'read') next = p.map(e => e.id === id ? { ...e, is_read: true } : e);
+      else if (action === 'unread') next = p.map(e => e.id === id ? { ...e, is_read: false } : e);
+      else if (['trash', 'spam', 'move'].includes(action)) {
+        next = p.filter(e => e.id !== id);
+        if (id === selectedId) { setSelectedId(null); setSelectedEmail(null); }
+      }
+      return next;
+    });
     if (selectedEmail?.id === id) {
-      if (action === 'star') setSelectedEmail(p => ({ ...p, is_starred: true }));
-      if (action === 'unstar') setSelectedEmail(p => ({ ...p, is_starred: false }));
-      if (action === 'read') setSelectedEmail(p => ({ ...p, is_read: true }));
-      if (action === 'unread') setSelectedEmail(p => ({ ...p, is_read: false }));
+      if (action === 'star') setSelectedEmail(p => p ? { ...p, is_starred: true } : p);
+      if (action === 'unstar') setSelectedEmail(p => p ? { ...p, is_starred: false } : p);
     }
-    try {
-      await api.post(`/api/mail/emails/${id}/action`, { action, target_folder: target });
-      emailCache.current.clear();
-      loadFolders();
-    } catch {}
+    api.post(`/api/mail/emails/${id}/action`, { action, target_folder: target }).then(() => { cache.current = {}; refreshFolders(); }).catch(() => {});
   };
 
-  const handleBulkAction = async (action, target) => {
+  const handleBulkAction = (action, target) => {
     const ids = [...selectedIds];
     if (!ids.length) return;
-    if (['trash', 'spam', 'move'].includes(action)) {
-      setEmails(prev => prev.filter(e => !selectedIds.has(e.id)));
-      if (selectedIds.has(selectedId)) { setSelectedId(null); setSelectedEmail(null); }
-    }
-    if (action === 'read') setEmails(prev => prev.map(e => selectedIds.has(e.id) ? { ...e, is_read: true } : e));
+    if (['trash', 'spam', 'move'].includes(action)) setEmails(p => p.filter(e => !selectedIds.has(e.id)));
+    if (action === 'read') setEmails(p => p.map(e => selectedIds.has(e.id) ? { ...e, is_read: true } : e));
     setSelectedIds(new Set());
-    try {
-      await api.post('/api/mail/bulk-action', { ids, action, target_folder: target });
-      emailCache.current.clear();
-      loadFolders();
-      loadEmails();
-    } catch {}
+    api.post('/api/mail/bulk-action', { ids, action, target_folder: target }).then(() => { cache.current = {}; refreshFolders(); }).catch(() => {});
     toast(`${ids.length} ${t('messages')} updated`);
   };
 
-  const handleDelete = async (id) => {
-    const original = emails.find(e => e.id === id);
-    setEmails(prev => prev.filter(e => e.id !== id));
+  const handleDelete = (id) => {
+    setEmails(p => p.filter(e => e.id !== id));
     if (id === selectedId) { setSelectedId(null); setSelectedEmail(null); }
-    try { await api.del(`/api/mail/emails/${id}`); emailCache.current.clear(); loadFolders(); } catch {}
-    toast(t('delete_email'), {
-      label: t('undo'),
-      fn: async () => {
-        if (original) {
-          try { await api.post(`/api/mail/emails/${id}/action`, { action: 'move', target_folder: original.folder }); emailCache.current.clear(); loadEmails(); loadFolders(); } catch {}
-        }
-      }
-    });
+    api.del(`/api/mail/emails/${id}`).then(() => { cache.current = {}; refreshFolders(); }).catch(() => {});
+    toast(t('delete_email'));
   };
 
-  const handleCompose = async (data) => {
-    try {
-      await api.post('/api/mail/compose', data);
-      setShowCompose(false); setReplyTo(null);
-      emailCache.current.clear(); loadEmails(); loadFolders();
-      toast(t('message_sent'), { label: t('undo'), fn: () => {} });
-    } catch {}
+  const handleCompose = (data) => {
+    api.post('/api/mail/compose', data).then(() => {
+      setShowCompose(false); setReplyTo(null); cache.current = {}; loadEmails(); refreshFolders();
+      toast(t('message_sent'));
+    }).catch(() => {});
   };
 
   const handleReply = (email) => { setReplyTo(email); setShowCompose(true); };
 
-  const toggleSelect = (id) => {
-    setSelectedIds(prev => {
-      const next = new Set(prev);
-      next.has(id) ? next.delete(id) : next.add(id);
-      return next;
-    });
-  };
+  const toggleSelect = (id) => setSelectedIds(p => { const n = new Set(p); n.has(id) ? n.delete(id) : n.add(id); return n; });
+  const toggleSelectAll = () => selectedIds.size === emails.length ? setSelectedIds(new Set()) : setSelectedIds(new Set(emails.map(e => e.id)));
 
-  const toggleSelectAll = () => {
-    if (selectedIds.size === emails.length) setSelectedIds(new Set());
-    else setSelectedIds(new Set(emails.map(e => e.id)));
-  };
+  const switchFolder = (f) => { setActiveFolder(f); setActiveCategory(''); setActiveLabel(''); setSearch(''); };
+  const switchLabel = (labelId) => { setActiveFolder('inbox'); setActiveCategory(''); setActiveLabel(labelId === activeLabel ? '' : labelId); setSearch(''); };
 
   return (
     <div className="h-screen flex overflow-hidden bg-white" data-testid="mail-dashboard">
       <Sidebar
-        folders={folders} labels={labels} activeFolder={activeFolder}
-        onFolderChange={(f) => { setActiveFolder(f); setActiveCategory(''); setSearch(''); }}
+        folders={folders} labels={labels} activeFolder={activeFolder} activeLabel={activeLabel}
+        onFolderChange={switchFolder} onLabelChange={switchLabel}
         onCompose={() => { setReplyTo(null); setShowCompose(true); }}
         onSettings={() => setShowSettings(true)}
       />
-      <div className="flex-1 flex flex-col border-s border-[var(--c-border)] overflow-hidden">
-        <div className="flex flex-1 overflow-hidden">
-          <EmailList
-            emails={emails} selectedId={selectedId} selectedIds={selectedIds}
-            search={search} onSearchChange={setSearch} onSelect={openEmail}
-            onToggleSelect={toggleSelect} onToggleSelectAll={toggleSelectAll}
-            activeFolder={activeFolder} activeCategory={activeCategory}
-            onCategoryChange={setActiveCategory} onBulkAction={handleBulkAction}
-            onAction={handleAction}
-          />
-          <div className="flex-1 border-s border-[var(--c-border)] overflow-hidden">
-            <EmailView email={selectedEmail} labels={labels} onReply={handleReply} onAction={handleAction} onDelete={handleDelete} />
-          </div>
+      <div className="flex-1 flex border-s border-slate-200 overflow-hidden">
+        <EmailList
+          emails={emails} selectedId={selectedId} selectedIds={selectedIds}
+          search={search} onSearchChange={setSearch} onSelect={openEmail}
+          onToggleSelect={toggleSelect} onToggleSelectAll={toggleSelectAll}
+          activeFolder={activeFolder} activeCategory={activeCategory}
+          onCategoryChange={setActiveCategory} onBulkAction={handleBulkAction}
+          onAction={handleAction}
+        />
+        <div className="flex-1 border-s border-slate-200 overflow-hidden">
+          <EmailView email={selectedEmail} labels={labels} onReply={handleReply} onAction={handleAction} onDelete={handleDelete} />
         </div>
       </div>
       {showCompose && <ComposeModal onClose={() => { setShowCompose(false); setReplyTo(null); }} onSend={handleCompose} replyTo={replyTo} />}
