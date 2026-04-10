@@ -32,6 +32,14 @@ services:
     volumes:
       - ./backend/app:/app/app:cached
 
+  grafana:
+    ports:
+      - "3001:3000"
+
+  prometheus:
+    ports:
+      - "9090:9090"
+
   frontend:
     ports:
       - "3000:80"

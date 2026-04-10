@@ -1,14 +1,16 @@
 import { useState } from 'react';
+import { useI18n } from '../i18n';
 import { X, Send, Minus } from 'lucide-react';
 
 export default function ComposeModal({ onClose, onSend, replyTo }) {
+  const { t } = useI18n();
   const [to, setTo] = useState(replyTo ? replyTo.from_addr : '');
-  const [subject, setSubject] = useState(replyTo ? `Re: ${replyTo.subject.replace(/^Re:\s*/i, '')}` : '');
-  const [body, setBody] = useState(replyTo ? `\n\n--- Original Message ---\n${replyTo.preview || ''}` : '');
+  const [subject, setSubject] = useState(replyTo ? `Re: ${replyTo.subject.replace(/^(Re|Fwd):\s*/i, '')}` : '');
+  const [body, setBody] = useState(replyTo ? `\n\n--- ${t('reply')} ---\n${replyTo.preview || ''}` : '');
   const [sending, setSending] = useState(false);
   const [minimized, setMinimized] = useState(false);
 
-  const handleSend = async () => {
+  const send = async () => {
     if (!to.trim() || !subject.trim()) return;
     setSending(true);
     await onSend({ to: to.split(',').map(s => s.trim()), subject, body: `<p>${body.replace(/\n/g, '<br/>')}</p>`, folder: 'sent' });
@@ -17,77 +19,51 @@ export default function ComposeModal({ onClose, onSend, replyTo }) {
 
   if (minimized) {
     return (
-      <div className="fixed bottom-0 end-6 z-50 animate-slide-up">
-        <button
-          data-testid="compose-restore-btn"
-          onClick={() => setMinimized(false)}
-          className="flex items-center gap-2 px-4 py-2.5 bg-nameh-accent text-white text-sm font-medium rounded-t shadow-lg hover:bg-nameh-accent-hover transition-colors"
-        >
+      <div className="fixed bottom-0 end-6 z-50 slide-up">
+        <button data-testid="compose-restore-btn" onClick={() => setMinimized(false)}
+          className="flex items-center gap-2 px-4 py-2.5 bg-[var(--c-text)] text-white text-sm font-medium rounded-t-lg shadow-xl hover:bg-[var(--c-text)]/90 transition-fast">
           <Send className="w-4 h-4" />
-          {subject || 'New message'}
+          <span className="max-w-[200px] truncate">{subject || t('new_message')}</span>
         </button>
       </div>
     );
   }
 
   return (
-    <div className="fixed bottom-0 end-6 z-50 w-[520px] bg-white rounded-t-lg shadow-2xl border border-nameh-border animate-slide-up" data-testid="compose-modal">
-      {/* Header */}
-      <div className="flex items-center justify-between px-4 py-2.5 bg-nameh-primary rounded-t-lg">
-        <span className="text-sm font-medium text-white">{replyTo ? 'Reply' : 'New Message'}</span>
+    <div className="fixed bottom-0 end-6 z-50 w-[520px] bg-white rounded-t-xl shadow-2xl border border-[var(--c-border)] slide-up" data-testid="compose-modal">
+      <div className="flex items-center justify-between px-4 py-2.5 bg-[var(--c-text)] rounded-t-xl cursor-move">
+        <span className="text-sm font-medium text-white">{replyTo ? t('reply') : t('new_message')}</span>
         <div className="flex items-center gap-1">
-          <button data-testid="compose-minimize-btn" onClick={() => setMinimized(true)} className="p-1 text-white/70 hover:text-white transition-colors">
-            <Minus className="w-4 h-4" />
-          </button>
-          <button data-testid="compose-close-btn" onClick={onClose} className="p-1 text-white/70 hover:text-white transition-colors">
-            <X className="w-4 h-4" />
-          </button>
+          <button data-testid="compose-minimize-btn" onClick={() => setMinimized(true)} className="p-1 text-white/70 hover:text-white transition-fast"><Minus className="w-4 h-4" /></button>
+          <button data-testid="compose-close-btn" onClick={onClose} className="p-1 text-white/70 hover:text-white transition-fast"><X className="w-4 h-4" /></button>
         </div>
       </div>
 
-      {/* Form */}
-      <div className="p-3 space-y-2">
-        <div className="flex items-center border-b border-nameh-border pb-2">
-          <span className="text-xs text-nameh-secondary w-12 shrink-0">To:</span>
-          <input
-            data-testid="compose-to-input"
-            type="text" value={to} onChange={(e) => setTo(e.target.value)}
-            placeholder="recipient@example.com"
-            className="flex-1 text-sm font-body focus:outline-none"
-          />
-        </div>
-        <div className="flex items-center border-b border-nameh-border pb-2">
-          <span className="text-xs text-nameh-secondary w-12 shrink-0">Subject:</span>
-          <input
-            data-testid="compose-subject-input"
-            type="text" value={subject} onChange={(e) => setSubject(e.target.value)}
-            placeholder="Email subject"
-            className="flex-1 text-sm font-body focus:outline-none"
-          />
-        </div>
-        <textarea
-          data-testid="compose-body-input"
-          value={body} onChange={(e) => setBody(e.target.value)}
-          rows={8}
-          placeholder="Write your message..."
-          className="w-full text-sm font-body resize-none focus:outline-none leading-relaxed"
-        />
+      <div className="p-3 space-y-0">
+        <Field label={t('to_field')} testId="compose-to-input" value={to} onChange={setTo} placeholder="recipient@example.com" />
+        <Field label={t('subject')} testId="compose-subject-input" value={subject} onChange={setSubject} placeholder={t('subject')} />
+        <textarea data-testid="compose-body-input" value={body} onChange={(e) => setBody(e.target.value)} rows={10}
+          placeholder={t('write_message')} className="w-full text-sm resize-none focus:outline-none leading-relaxed pt-2" />
       </div>
 
-      {/* Footer */}
-      <div className="flex items-center justify-between px-3 py-2 border-t border-nameh-border">
-        <button
-          data-testid="compose-send-btn"
-          onClick={handleSend} disabled={sending || !to.trim()}
-          className="flex items-center gap-2 px-4 py-1.5 bg-nameh-accent text-white text-sm font-medium rounded hover:bg-nameh-accent-hover focus-visible:ring-2 focus-visible:ring-blue-600 focus-visible:outline-none transition-colors disabled:opacity-50"
-        >
+      <div className="flex items-center justify-between px-3 py-2 border-t border-[var(--c-border)]">
+        <button data-testid="compose-send-btn" onClick={send} disabled={sending || !to.trim()}
+          className="flex items-center gap-2 px-5 py-1.5 bg-[var(--c-accent)] text-white text-sm font-medium rounded-2xl hover:bg-[var(--c-accent-hover)] transition-fast disabled:opacity-50 shadow-sm">
           <Send className="w-3.5 h-3.5" />
-          {sending ? 'Sending...' : 'Send'}
+          {sending ? t('sending') : t('send')}
         </button>
-        <button onClick={onClose} className="text-xs text-nameh-secondary hover:text-nameh-danger transition-colors">
-          Discard
-        </button>
+        <button onClick={onClose} className="text-xs text-[var(--c-text2)] hover:text-[var(--c-danger)] transition-fast">{t('discard')}</button>
       </div>
+    </div>
+  );
+}
+
+function Field({ label, testId, value, onChange, placeholder }) {
+  return (
+    <div className="flex items-center border-b border-[var(--c-border)]/50 py-1.5">
+      <span className="text-xs text-[var(--c-text2)] w-14 shrink-0">{label}:</span>
+      <input data-testid={testId} type="text" value={value} onChange={(e) => onChange(e.target.value)} placeholder={placeholder}
+        className="flex-1 text-sm focus:outline-none" />
     </div>
   );
 }
