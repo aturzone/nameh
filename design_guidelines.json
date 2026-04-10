@@ -1,0 +1,81 @@
+{
+  "theme": "light",
+  "archetype": "Archetype 4: Swiss & High-Contrast",
+  "design_philosophy": "A pristine, ultra-fast, minimalist email client prioritizing focus, typography, and clear visual hierarchy. Inspired by Superhuman, using dense 'Control Room' grids, sharp 1px borders, and high legibility. Explicitly supports RTL (Persian) using Tailwind logical properties.",
+  "colors": {
+    "background": "#FFFFFF",
+    "surface": "#F8FAFC",
+    "border": "#E2E8F0",
+    "text_primary": "#0F172A",
+    "text_secondary": "#64748b",
+    "primary_accent": "#1E3A8A",
+    "primary_accent_hover": "#1E40AF",
+    "danger": "#EF4444",
+    "unread_indicator": "#2563EB",
+    "row_hover": "#F1F5F9"
+  },
+  "typography": {
+    "heading_font": "Manrope",
+    "body_font": "IBM Plex Sans",
+    "rules": [
+      "No Inter.",
+      "Tracking-tight for headings above 24px.",
+      "Overlines for labels (uppercase, tracking-[0.2em], text-xs).",
+      "Email list items: Sender is font-medium text-sm, subject is text-sm text-slate-700, preview is text-sm text-slate-500 truncate.",
+      "RTL Typography: Ensure fonts selected have good Arabic/Persian glyph support (Vazirmatn or Tahoma as fallbacks for Persian text)."
+    ]
+  },
+  "layout": {
+    "type": "Control Room Grid",
+    "structure": "3-column layout (Sidebar, Mail List, Reading Pane). H-full usage.",
+    "rtl_support": "CRITICAL: MUST use logical properties in Tailwind (ms-*, me-*, ps-*, pe-*, border-e-*, text-start). Avoid left/right specific utilities like ml-*, pr-*.",
+    "spacing": "Dense in email list (p-3 or p-4 per row). Generous padding in reading pane (px-8 py-6)."
+  },
+  "components": {
+    "sidebar": "Flat surface, subtle border-e. Links use pure text colors, active state is a soft gray background. No heavy gradients.",
+    "email_list": "border-collapse style. border-b on every item. Selected item has an active background and strong border-s-4 accent.",
+    "reading_pane": "Maximum breathing room. Glassmorphic sticky header for action buttons (Reply, Forward, Trash).",
+    "buttons": "Shadcn defaults customized to have 4px border radius. High contrast.",
+    "badges": "Use Shadcn badges for labels, with soft pastel backgrounds and dark text for contrast."
+  },
+  "surface_strategies": [
+    "Grid Borders: Use visible 1px borders to separate panes and email list rows.",
+    "Glassmorphism: Use backdrop-blur-md bg-white/80 for sticky action bars in the reading pane.",
+    "Neumorphism: Banned. Keep it flat and technical."
+  ],
+  "accessibility_and_interactions": [
+    "Hover states must be explicitly defined (hover:bg-slate-100 hover:text-slate-900).",
+    "Focus rings must be visible (focus-visible:ring-2 focus-visible:ring-blue-600 focus-visible:outline-none).",
+    "data-testid required on all interactive elements."
+  ],
+  "image_urls": {
+    "login_background": {
+      "url": "https://static.prod-images.emergentagent.com/jobs/27b2d35e-9173-449a-8418-3fea8c0fa0f1/images/5f8cdd65636dc3cd893b9d270f24d4ca5c123add7b0d57ebdf24d714ec84161d.png",
+      "description": "Abstract geometric clean login background for authentication page"
+    },
+    "hero_brand": {
+      "url": "https://static.prod-images.emergentagent.com/jobs/27b2d35e-9173-449a-8418-3fea8c0fa0f1/images/d7ca531a3926d2663bc0889b50c4bfe58312143bb6383b0ecb643598cc59ef9d.png",
+      "description": "Minimalist 3D render floating paper envelope for branding or landing page hero"
+    },
+    "inbox_zero": {
+      "url": "https://static.prod-images.emergentagent.com/jobs/27b2d35e-9173-449a-8418-3fea8c0fa0f1/images/1b791fbd32881266770f0fdf9605d2102ade37f2524db0bbc13fe72746ab3f8c.png",
+      "description": "Inbox zero empty state illustration with minimalist bonsai for dashboard empty state"
+    },
+    "empty_state_nature_1": {
+      "url": "https://images.unsplash.com/photo-1770139631904-16342b6369a7?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjAzMzV8MHwxfHNlYXJjaHwzfHxjYWxtJTIwbmF0dXJlJTIwbWluaW1hbGlzdHxlbnwwfHx8fDE3NzU4NDgwMDZ8MA&ixlib=rb-4.1.0&q=85",
+      "description": "Lone tree on dry grassy hill, alternative for calming empty state"
+    },
+    "empty_state_nature_2": {
+      "url": "https://images.unsplash.com/photo-1760365928237-9467daafb1ab?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjAzMzV8MHwxfHNlYXJjaHwyfHxjYWxtJTIwbmF0dXJlJTIwbWluaW1hbGlzdHxlbnwwfHx8fDE3NzU4NDgwMDZ8MA&ixlib=rb-4.1.0&q=85",
+      "description": "Long pier extending into foggy water, alternative for calming empty state"
+    }
+  },
+  "instructions_to_main_agent": [
+    "Install and use lucide-react for icons.",
+    "Use Shadcn UI components but heavily customize them to remove the 'Vercel look' - favor crisp 4px border radii.",
+    "Implement RTL toggle in settings, and ensure entire UI flips using dir='rtl' and Tailwind logical properties.",
+    "Ensure main app layout fills 100vh and disables page-level scrolling, allowing individual panes (sidebar, mail list, reading pane) to scroll independently.",
+    "All data fetching must connect to the FastAPI backend.",
+    "Use standard HTML5 drag and drop for any folder organization if needed."
+  ]
+}
