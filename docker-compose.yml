@@ -1,158 +1,335 @@
 ###############################################################
-#  IranMail MVP Stack — Full Local Test
-#  Services: Stalwart (mail) + Roundcube (webmail)
-#            + Rspamd (spam) + ClamAV (virus) + Nginx (proxy)
+#  Nameh.me — Production-Grade Mail Infrastructure
+#  Usage: docker compose up -d
+#  Docs:  See README.md
 ###############################################################
 
 services:
 
-  # ─────────────────────────────────────────────
-  # 1. STALWART — All-in-one Mail Server
-  #    SMTP / IMAP / JMAP / CalDAV / CardDAV / WebDAV
-  #    Admin UI → http://localhost:8080
-  # ─────────────────────────────────────────────
+  # ═══════════════════════════════════════════════
+  #  TRAEFIK — Edge Proxy & TLS Termination
+  #  Dashboard: http://localhost:8090
+  # ═══════════════════════════════════════════════
+  traefik:
+    image: traefik:v3.2
+    container_name: nameh-traefik
+    restart: unless-stopped
+    command:
+      - --configFile=/etc/traefik/traefik.yml
+    ports:
+      - "80:80"
+      - "443:443"
+      - "8090:8080"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - ./infrastructure/traefik/traefik.yml:/etc/traefik/traefik.yml:ro
+      - ./infrastructure/traefik/dynamic:/etc/traefik/dynamic:ro
+      - traefik-acme:/acme
+    networks:
+      - nameh-net
+    healthcheck:
+      test: ["CMD", "traefik", "healthcheck"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+
+  # ═══════════════════════════════════════════════
+  #  STALWART — Core Mail Engine (Rust)
+  #  SMTP / IMAP / JMAP / CalDAV / CardDAV
+  #  Admin UI: http://admin.localhost (via Traefik)
+  #  Direct:   http://localhost:8080 (override)
+  # ═══════════════════════════════════════════════
   stalwart:
     image: stalwartlabs/stalwart:latest
-    container_name: stalwart
+    container_name: nameh-stalwart
     restart: unless-stopped
-    hostname: mail.localhost
+    hostname: ${MAIL_HOSTNAME:-mail.localhost}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      minio-init:
+        condition: service_completed_successfully
     ports:
-      - "25:25"       # SMTP (receiving mail from the internet)
-      - "587:587"     # SMTP Submission (send mail, clients)
-      - "465:465"     # SMTP Submission (TLS)
-      - "143:143"     # IMAP
-      - "993:993"     # IMAPS (TLS)
-      - "110:110"     # POP3
-      - "995:995"     # POP3S (TLS)
-      - "4190:4190"   # ManageSieve (email filters)
-      - "8080:8080"   # Admin Web UI ← open this first!
+      - "25:25"
+      - "587:587"
+      - "465:465"
+      - "143:143"
+      - "993:993"
+      - "4190:4190"
     volumes:
-      - stalwart-data:/opt/stalwart
-    networks:
-      - mailnet
+      - stalwart-data:/opt/stalwart/data
+      - ./infrastructure/stalwart/config.toml:/opt/stalwart/etc/config.toml
     environment:
-      - TZ=Asia/Tehran
+      TZ: ${TIMEZONE:-Asia/Tehran}
+    networks:
+      - nameh-net
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.stalwart-admin.rule=Host(`${ADMIN_DOMAIN:-admin.localhost}`)"
+      - "traefik.http.routers.stalwart-admin.entrypoints=web"
+      - "traefik.http.services.stalwart-admin.loadbalancer.server.port=8080"
 
-  # ─────────────────────────────────────────────
-  # 2. ROUNDCUBE — Full-featured Webmail
-  #    Access → http://localhost (via Nginx)
-  #    Best open-source webmail, IMAP/SMTP,
-  #    supports Persian/RTL, plugins, mobile
-  # ─────────────────────────────────────────────
+  # ═══════════════════════════════════════════════
+  #  POSTGRESQL — Primary Database
+  #  Stores: Stalwart metadata + Backend API data
+  # ═══════════════════════════════════════════════
+  postgres:
+    image: postgres:16-alpine
+    container_name: nameh-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-nameh}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-nameh_secret_2024}
+      POSTGRES_DB: ${POSTGRES_DB:-nameh}
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+      - ./infrastructure/postgres/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    networks:
+      - nameh-net
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-nameh}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ═══════════════════════════════════════════════
+  #  REDIS — Cache & Session Store
+  # ═══════════════════════════════════════════════
+  redis:
+    image: redis:7-alpine
+    container_name: nameh-redis
+    restart: unless-stopped
+    command: redis-server /usr/local/etc/redis/redis.conf
+    volumes:
+      - redis-data:/data
+      - ./infrastructure/redis/redis.conf:/usr/local/etc/redis/redis.conf:ro
+    networks:
+      - nameh-net
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ═══════════════════════════════════════════════
+  #  MINIO — S3-Compatible Object Storage
+  #  Console: http://minio.localhost (via Traefik)
+  #  Direct:  http://localhost:9001 (override)
+  # ═══════════════════════════════════════════════
+  minio:
+    image: minio/minio:latest
+    container_name: nameh-minio
+    restart: unless-stopped
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-nameh_minio}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-nameh_minio_secret_2024}
+    volumes:
+      - minio-data:/data
+    networks:
+      - nameh-net
+    healthcheck:
+      test: ["CMD", "mc", "ready", "local"]
+      interval: 15s
+      timeout: 10s
+      retries: 5
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.minio-console.rule=Host(`${MINIO_DOMAIN:-minio.localhost}`)"
+      - "traefik.http.routers.minio-console.entrypoints=web"
+      - "traefik.http.services.minio-console.loadbalancer.server.port=9001"
+
+  # ═══════════════════════════════════════════════
+  #  MINIO INIT — Create Required Buckets
+  #  One-shot container, exits after completion
+  # ═══════════════════════════════════════════════
+  minio-init:
+    image: minio/mc:latest
+    container_name: nameh-minio-init
+    depends_on:
+      minio:
+        condition: service_healthy
+    entrypoint: /bin/sh
+    command: /init.sh
+    volumes:
+      - ./infrastructure/minio/init.sh:/init.sh:ro
+    networks:
+      - nameh-net
+    restart: "no"
+
+  # ═══════════════════════════════════════════════
+  #  RSPAMD — Spam Filtering Engine
+  #  Dashboard: http://rspamd.localhost (via Traefik)
+  # ═══════════════════════════════════════════════
+  rspamd:
+    image: rspamd/rspamd:latest
+    container_name: nameh-rspamd
+    restart: unless-stopped
+    depends_on:
+      redis:
+        condition: service_healthy
+    volumes:
+      - rspamd-data:/var/lib/rspamd
+      - ./infrastructure/rspamd/local.d:/etc/rspamd/local.d:ro
+    networks:
+      - nameh-net
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.rspamd.rule=Host(`${RSPAMD_DOMAIN:-rspamd.localhost}`)"
+      - "traefik.http.routers.rspamd.entrypoints=web"
+      - "traefik.http.services.rspamd.loadbalancer.server.port=11334"
+
+  # ═══════════════════════════════════════════════
+  #  CLAMAV — Antivirus Scanner
+  #  Used by Rspamd to scan attachments
+  # ═══════════════════════════════════════════════
+  clamav:
+    image: clamav/clamav:stable
+    container_name: nameh-clamav
+    restart: unless-stopped
+    volumes:
+      - clamav-data:/var/lib/clamav
+    networks:
+      - nameh-net
+    environment:
+      TZ: ${TIMEZONE:-Asia/Tehran}
+
+  # ═══════════════════════════════════════════════
+  #  ROUNDCUBE — Reference Webmail (Fallback)
+  #  Access: http://webmail.localhost (via Traefik)
+  # ═══════════════════════════════════════════════
   roundcube:
     image: roundcube/roundcubemail:latest-apache
-    container_name: roundcube
+    container_name: nameh-roundcube
     restart: unless-stopped
     depends_on:
       - stalwart
       - roundcube-db
     environment:
-      - ROUNDCUBEMAIL_DB_TYPE=pgsql
-      - ROUNDCUBEMAIL_DB_HOST=roundcube-db
-      - ROUNDCUBEMAIL_DB_USER=roundcube
-      - ROUNDCUBEMAIL_DB_PASSWORD=roundcube_secret
-      - ROUNDCUBEMAIL_DB_NAME=roundcubemail
-      - ROUNDCUBEMAIL_DEFAULT_HOST=tls://stalwart    # IMAP
-      - ROUNDCUBEMAIL_DEFAULT_PORT=993
-      - ROUNDCUBEMAIL_SMTP_SERVER=tls://stalwart     # SMTP
-      - ROUNDCUBEMAIL_SMTP_PORT=465
-      - ROUNDCUBEMAIL_SKIN=elastic                   # Modern responsive skin
-      - ROUNDCUBEMAIL_PLUGINS=archive,zipdownload,managesieve,carddav,calendar
-      - ROUNDCUBEMAIL_UPLOAD_MAX_FILESIZE=25M
-      - TZ=Asia/Tehran
-    volumes:
-      - roundcube-data:/var/roundcube/db
-      - ./roundcube-config/config.inc.php:/var/roundcube/config/config.inc.php:ro
+      ROUNDCUBEMAIL_DB_TYPE: pgsql
+      ROUNDCUBEMAIL_DB_HOST: roundcube-db
+      ROUNDCUBEMAIL_DB_USER: roundcube
+      ROUNDCUBEMAIL_DB_PASSWORD: ${ROUNDCUBE_DB_PASSWORD:-roundcube_secret_2024}
+      ROUNDCUBEMAIL_DB_NAME: roundcubemail
+      ROUNDCUBEMAIL_DEFAULT_HOST: tls://stalwart
+      ROUNDCUBEMAIL_DEFAULT_PORT: "993"
+      ROUNDCUBEMAIL_SMTP_SERVER: tls://stalwart
+      ROUNDCUBEMAIL_SMTP_PORT: "465"
+      ROUNDCUBEMAIL_SKIN: elastic
+      ROUNDCUBEMAIL_PLUGINS: archive,zipdownload,managesieve
+      ROUNDCUBEMAIL_UPLOAD_MAX_FILESIZE: 25M
+      TZ: ${TIMEZONE:-Asia/Tehran}
     networks:
-      - mailnet
+      - nameh-net
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.roundcube.rule=Host(`${WEBMAIL_DOMAIN:-webmail.localhost}`)"
+      - "traefik.http.routers.roundcube.entrypoints=web"
+      - "traefik.http.services.roundcube.loadbalancer.server.port=80"
 
-  # ─────────────────────────────────────────────
-  # 3. POSTGRESQL — Roundcube Database
-  # ─────────────────────────────────────────────
+  # ═══════════════════════════════════════════════
+  #  ROUNDCUBE DB — Isolated PostgreSQL for Webmail
+  # ═══════════════════════════════════════════════
   roundcube-db:
     image: postgres:16-alpine
-    container_name: roundcube-db
+    container_name: nameh-roundcube-db
     restart: unless-stopped
     environment:
-      - POSTGRES_DB=roundcubemail
-      - POSTGRES_USER=roundcube
-      - POSTGRES_PASSWORD=roundcube_secret
+      POSTGRES_DB: roundcubemail
+      POSTGRES_USER: roundcube
+      POSTGRES_PASSWORD: ${ROUNDCUBE_DB_PASSWORD:-roundcube_secret_2024}
     volumes:
       - roundcube-db-data:/var/lib/postgresql/data
     networks:
-      - mailnet
+      - nameh-net
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U roundcube"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
-  # ─────────────────────────────────────────────
-  # 4. RSPAMD — Spam Filter (Milter protocol)
-  #    Dashboard → http://localhost:11334
-  #    Integrates with Stalwart via milter port
-  # ─────────────────────────────────────────────
-  rspamd:
-    image: rspamd/rspamd:latest
-    container_name: rspamd
+  # ═══════════════════════════════════════════════
+  #  BACKEND API — Custom Application Layer
+  #  Access: http://api.localhost (via Traefik)
+  #  Direct: http://localhost:8000 (override)
+  # ═══════════════════════════════════════════════
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: nameh-backend
     restart: unless-stopped
-    ports:
-      - "11334:11334"   # Rspamd Web UI
-      - "11332:11332"   # Milter port (Stalwart connects here)
-    volumes:
-      - rspamd-data:/var/lib/rspamd
-      - ./rspamd-config:/etc/rspamd/local.d
-    networks:
-      - mailnet
-    environment:
-      - TZ=Asia/Tehran
-
-  # ─────────────────────────────────────────────
-  # 5. CLAMAV — Antivirus Scanner
-  #    Used by Rspamd to scan attachments
-  # ─────────────────────────────────────────────
-  clamav:
-    image: clamav/clamav:stable
-    container_name: clamav
-    restart: unless-stopped
-    volumes:
-      - clamav-data:/var/lib/clamav
-    networks:
-      - mailnet
-    environment:
-      - TZ=Asia/Tehran
-
-  # ─────────────────────────────────────────────
-  # 6. NGINX — Reverse Proxy
-  #    Routes all HTTP/HTTPS traffic cleanly:
-  #    localhost        → Roundcube webmail
-  #    localhost/admin  → Stalwart admin
-  #    localhost/rspamd → Rspamd dashboard
-  # ─────────────────────────────────────────────
-  nginx:
-    image: nginx:alpine
-    container_name: nginx
-    restart: unless-stopped
-    ports:
-      - "80:80"
-      - "443:443"
-    volumes:
-      - ./nginx/conf.d:/etc/nginx/conf.d:ro
     depends_on:
-      - roundcube
-      - stalwart
-      - rspamd
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-nameh}:${POSTGRES_PASSWORD:-nameh_secret_2024}@postgres:5432/${POSTGRES_DB:-nameh}
+      REDIS_URL: redis://redis:6379/0
+      STALWART_URL: http://stalwart:8080
+      STALWART_ADMIN_USER: ${STALWART_ADMIN_USER:-admin}
+      STALWART_ADMIN_PASSWORD: ${STALWART_ADMIN_PASSWORD:-}
+      MINIO_ENDPOINT: http://minio:9000
+      MINIO_ACCESS_KEY: ${MINIO_ROOT_USER:-nameh_minio}
+      MINIO_SECRET_KEY: ${MINIO_ROOT_PASSWORD:-nameh_minio_secret_2024}
+      SECRET_KEY: ${SECRET_KEY:-dev-secret-change-in-production}
+      JWT_ALGORITHM: ${JWT_ALGORITHM:-HS256}
+      ACCESS_TOKEN_EXPIRE_MINUTES: ${ACCESS_TOKEN_EXPIRE_MINUTES:-30}
+      ENVIRONMENT: ${ENVIRONMENT:-development}
+      DOMAIN: ${DOMAIN:-nameh.me}
     networks:
-      - mailnet
+      - nameh-net
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.backend.rule=Host(`${API_DOMAIN:-api.localhost}`) || PathPrefix(`/api`)"
+      - "traefik.http.routers.backend.entrypoints=web"
+      - "traefik.http.services.backend.loadbalancer.server.port=8000"
+
+  # ═══════════════════════════════════════════════
+  #  STALWART INIT — Post-boot Configuration
+  #  Configures domains and initial accounts
+  # ═══════════════════════════════════════════════
+  stalwart-init:
+    image: curlimages/curl:latest
+    container_name: nameh-stalwart-init
+    depends_on:
+      - stalwart
+    entrypoint: /bin/sh
+    command: /scripts/init-stalwart.sh
+    volumes:
+      - ./scripts/init-stalwart.sh:/scripts/init-stalwart.sh:ro
+    networks:
+      - nameh-net
+    restart: "no"
 
 ###############################################################
-#  VOLUMES
+#  VOLUMES — Persistent Data
 ###############################################################
 volumes:
   stalwart-data:
-  roundcube-data:
-  roundcube-db-data:
+    name: nameh-stalwart-data
+  postgres-data:
+    name: nameh-postgres-data
+  redis-data:
+    name: nameh-redis-data
+  minio-data:
+    name: nameh-minio-data
   rspamd-data:
+    name: nameh-rspamd-data
   clamav-data:
+    name: nameh-clamav-data
+  roundcube-db-data:
+    name: nameh-roundcube-db-data
+  traefik-acme:
+    name: nameh-traefik-acme
 
 ###############################################################
 #  NETWORKS
 ###############################################################
 networks:
-  mailnet:
+  nameh-net:
     driver: bridge
+    name: nameh-net

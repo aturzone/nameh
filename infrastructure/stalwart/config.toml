@@ -1,0 +1,86 @@
+# ══════════════════════════════════════════════════════════════
+#  Nameh.me — Stalwart Mail Server Bootstrap Configuration
+#  This config initializes storage backends on first boot.
+#  After boot, manage settings via the Admin UI (port 8080).
+# ══════════════════════════════════════════════════════════════
+
+# ── Server ────────────────────────────────────────────────────
+
+[server]
+hostname = "mail.localhost"
+
+# ── Listeners ─────────────────────────────────────────────────
+
+[server.listener."smtp"]
+bind = ["[::]:25"]
+protocol = "smtp"
+
+[server.listener."submission"]
+bind = ["[::]:587"]
+protocol = "smtp"
+
+[server.listener."submissions"]
+bind = ["[::]:465"]
+protocol = "smtp"
+tls.implicit = true
+
+[server.listener."imap"]
+bind = ["[::]:143"]
+protocol = "imap"
+
+[server.listener."imaps"]
+bind = ["[::]:993"]
+protocol = "imap"
+tls.implicit = true
+
+[server.listener."sieve"]
+bind = ["[::]:4190"]
+protocol = "managesieve"
+
+[server.listener."http"]
+bind = ["[::]:8080"]
+protocol = "http"
+
+# ── PostgreSQL Data Store ─────────────────────────────────────
+
+[store."data"]
+type = "postgresql"
+host = "postgres"
+port = 5432
+database = "stalwart"
+user = "nameh"
+password = "nameh_secret_2024"
+timeout = "15s"
+
+[store."data".pool]
+max-connections = 20
+
+[store."data".tls]
+enable = false
+allow-invalid-certs = true
+
+# ── S3 / MinIO Blob Store ────────────────────────────────────
+
+[store."blob"]
+type = "s3"
+bucket = "stalwart-mail"
+region = "us-east-1"
+endpoint = "http://minio:9000"
+access-key = "nameh_minio"
+secret-key = "nameh_minio_secret_2024"
+timeout = "30s"
+
+# ── Redis Lookup Store ────────────────────────────────────────
+
+[store."lookup"]
+type = "redis"
+urls = "redis://redis:6379"
+
+# ── Storage Assignment ────────────────────────────────────────
+
+[storage]
+data = "data"
+blob = "blob"
+lookup = "lookup"
+fts = "data"
+directory = "internal"

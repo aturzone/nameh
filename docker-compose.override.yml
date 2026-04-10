@@ -1,0 +1,41 @@
+###############################################################
+#  Nameh.me — Local Development Overrides
+#  Automatically loaded by Docker Compose
+#  Exposes direct ports for debugging without Traefik routing
+###############################################################
+
+services:
+
+  stalwart:
+    ports:
+      - "8080:8080"
+
+  minio:
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+
+  rspamd:
+    ports:
+      - "11334:11334"
+
+  roundcube:
+    ports:
+      - "8888:80"
+
+  backend:
+    ports:
+      - "8000:8000"
+    environment:
+      ENVIRONMENT: development
+      DEBUG: "true"
+    volumes:
+      - ./backend/app:/app/app:cached
+
+  redis:
+    ports:
+      - "6379:6379"
+
+  postgres:
+    ports:
+      - "5432:5432"
