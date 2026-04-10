@@ -1,0 +1,158 @@
+###############################################################
+#  IranMail MVP Stack — Full Local Test
+#  Services: Stalwart (mail) + Roundcube (webmail)
+#            + Rspamd (spam) + ClamAV (virus) + Nginx (proxy)
+###############################################################
+
+services:
+
+  # ─────────────────────────────────────────────
+  # 1. STALWART — All-in-one Mail Server
+  #    SMTP / IMAP / JMAP / CalDAV / CardDAV / WebDAV
+  #    Admin UI → http://localhost:8080
+  # ─────────────────────────────────────────────
+  stalwart:
+    image: stalwartlabs/stalwart:latest
+    container_name: stalwart
+    restart: unless-stopped
+    hostname: mail.localhost
+    ports:
+      - "25:25"       # SMTP (receiving mail from the internet)
+      - "587:587"     # SMTP Submission (send mail, clients)
+      - "465:465"     # SMTP Submission (TLS)
+      - "143:143"     # IMAP
+      - "993:993"     # IMAPS (TLS)
+      - "110:110"     # POP3
+      - "995:995"     # POP3S (TLS)
+      - "4190:4190"   # ManageSieve (email filters)
+      - "8080:8080"   # Admin Web UI ← open this first!
+    volumes:
+      - stalwart-data:/opt/stalwart
+    networks:
+      - mailnet
+    environment:
+      - TZ=Asia/Tehran
+
+  # ─────────────────────────────────────────────
+  # 2. ROUNDCUBE — Full-featured Webmail
+  #    Access → http://localhost (via Nginx)
+  #    Best open-source webmail, IMAP/SMTP,
+  #    supports Persian/RTL, plugins, mobile
+  # ─────────────────────────────────────────────
+  roundcube:
+    image: roundcube/roundcubemail:latest-apache
+    container_name: roundcube
+    restart: unless-stopped
+    depends_on:
+      - stalwart
+      - roundcube-db
+    environment:
+      - ROUNDCUBEMAIL_DB_TYPE=pgsql
+      - ROUNDCUBEMAIL_DB_HOST=roundcube-db
+      - ROUNDCUBEMAIL_DB_USER=roundcube
+      - ROUNDCUBEMAIL_DB_PASSWORD=roundcube_secret
+      - ROUNDCUBEMAIL_DB_NAME=roundcubemail
+      - ROUNDCUBEMAIL_DEFAULT_HOST=tls://stalwart    # IMAP
+      - ROUNDCUBEMAIL_DEFAULT_PORT=993
+      - ROUNDCUBEMAIL_SMTP_SERVER=tls://stalwart     # SMTP
+      - ROUNDCUBEMAIL_SMTP_PORT=465
+      - ROUNDCUBEMAIL_SKIN=elastic                   # Modern responsive skin
+      - ROUNDCUBEMAIL_PLUGINS=archive,zipdownload,managesieve,carddav,calendar
+      - ROUNDCUBEMAIL_UPLOAD_MAX_FILESIZE=25M
+      - TZ=Asia/Tehran
+    volumes:
+      - roundcube-data:/var/roundcube/db
+      - ./roundcube-config/config.inc.php:/var/roundcube/config/config.inc.php:ro
+    networks:
+      - mailnet
+
+  # ─────────────────────────────────────────────
+  # 3. POSTGRESQL — Roundcube Database
+  # ─────────────────────────────────────────────
+  roundcube-db:
+    image: postgres:16-alpine
+    container_name: roundcube-db
+    restart: unless-stopped
+    environment:
+      - POSTGRES_DB=roundcubemail
+      - POSTGRES_USER=roundcube
+      - POSTGRES_PASSWORD=roundcube_secret
+    volumes:
+      - roundcube-db-data:/var/lib/postgresql/data
+    networks:
+      - mailnet
+
+  # ─────────────────────────────────────────────
+  # 4. RSPAMD — Spam Filter (Milter protocol)
+  #    Dashboard → http://localhost:11334
+  #    Integrates with Stalwart via milter port
+  # ─────────────────────────────────────────────
+  rspamd:
+    image: rspamd/rspamd:latest
+    container_name: rspamd
+    restart: unless-stopped
+    ports:
+      - "11334:11334"   # Rspamd Web UI
+      - "11332:11332"   # Milter port (Stalwart connects here)
+    volumes:
+      - rspamd-data:/var/lib/rspamd
+      - ./rspamd-config:/etc/rspamd/local.d
+    networks:
+      - mailnet
+    environment:
+      - TZ=Asia/Tehran
+
+  # ─────────────────────────────────────────────
+  # 5. CLAMAV — Antivirus Scanner
+  #    Used by Rspamd to scan attachments
+  # ─────────────────────────────────────────────
+  clamav:
+    image: clamav/clamav:stable
+    container_name: clamav
+    restart: unless-stopped
+    volumes:
+      - clamav-data:/var/lib/clamav
+    networks:
+      - mailnet
+    environment:
+      - TZ=Asia/Tehran
+
+  # ─────────────────────────────────────────────
+  # 6. NGINX — Reverse Proxy
+  #    Routes all HTTP/HTTPS traffic cleanly:
+  #    localhost        → Roundcube webmail
+  #    localhost/admin  → Stalwart admin
+  #    localhost/rspamd → Rspamd dashboard
+  # ─────────────────────────────────────────────
+  nginx:
+    image: nginx:alpine
+    container_name: nginx
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx/conf.d:/etc/nginx/conf.d:ro
+    depends_on:
+      - roundcube
+      - stalwart
+      - rspamd
+    networks:
+      - mailnet
+
+###############################################################
+#  VOLUMES
+###############################################################
+volumes:
+  stalwart-data:
+  roundcube-data:
+  roundcube-db-data:
+  rspamd-data:
+  clamav-data:
+
+###############################################################
+#  NETWORKS
+###############################################################
+networks:
+  mailnet:
+    driver: bridge
