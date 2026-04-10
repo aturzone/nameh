@@ -85,7 +85,16 @@ const fa = {
   keyboard_shortcuts: 'میانبرهای صفحه کلید',
   theme: 'تم',
   light: 'روشن',
+  dark: 'تاریک',
   close: 'بستن',
+  labels_tab: 'برچسب\u200cها',
+  add_label: 'افزودن برچسب',
+  label_name: 'نام برچسب',
+  delete_label: 'حذف',
+  edit_label: 'ویرایش',
+  no_labels: 'هنوز برچسبی وجود ندارد',
+  label_color: 'رنگ',
+  appearance: 'ظاهر',
 
   // Keyboard
   kb_title: 'میانبرهای صفحه کلید',
@@ -99,6 +108,7 @@ const fa = {
   kb_search: 'جستجو',
   kb_select: 'انتخاب / لغو انتخاب',
   kb_esc: 'بستن / بازگشت',
+  kb_shortcuts_hint: 'کلید ? برای میانبرها',
 
   // Time
   now: 'الان',

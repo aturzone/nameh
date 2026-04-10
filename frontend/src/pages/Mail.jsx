@@ -7,6 +7,7 @@ import EmailView from '../components/EmailView';
 import ComposeModal from '../components/ComposeModal';
 import Settings from '../components/Settings';
 import api from '../services/api';
+import { X } from 'lucide-react';
 
 export default function Mail() {
   const { toast } = useContext(ToastContext);
@@ -24,27 +25,30 @@ export default function Mail() {
   const [replyTo, setReplyTo] = useState(null);
   const [selectedIds, setSelectedIds] = useState(new Set());
   const [showSettings, setShowSettings] = useState(false);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [showShortcuts, setShowShortcuts] = useState(false);
   const cache = useRef({});
 
-  // Load all data on mount
+  // Load all data on mount + apply saved theme
   useEffect(() => {
+    const savedTheme = localStorage.getItem('nameh_theme');
+    if (savedTheme) document.documentElement.setAttribute('data-theme', savedTheme);
     api.get('/api/mail/folders').then(d => setFolders(d.folders)).catch(() => {});
     api.get('/api/mail/labels').then(d => setLabels(d.labels)).catch(() => {});
-    // Preload all folders
     ['inbox','sent','drafts','trash','spam','starred'].forEach(f => {
       api.get(`/api/mail/emails?folder=${f}`).then(d => { cache.current[f] = d.emails; }).catch(() => {});
     });
   }, []);
 
+  const refreshLabels = () => api.get('/api/mail/labels').then(d => setLabels(d.labels)).catch(() => {});
+
   const loadEmails = useCallback(() => {
     const catQ = activeCategory ? `&category=${activeCategory}` : '';
     const searchQ = search ? `&search=${encodeURIComponent(search)}` : '';
     const key = `${activeFolder}${catQ}${searchQ}`;
-    // Show cached instantly
     if (cache.current[key]) setEmails(cache.current[key]);
     api.get(`/api/mail/emails?folder=${activeFolder}${catQ}${searchQ}`).then(d => {
       cache.current[key] = d.emails;
-      // Filter by label client-side if label is active
       let filtered = d.emails;
       if (activeLabel) {
         filtered = filtered.filter(e => (e.labels || []).includes(activeLabel));
@@ -57,7 +61,6 @@ export default function Mail() {
     setSelectedId(null);
     setSelectedEmail(null);
     setSelectedIds(new Set());
-    // Instant switch from cache
     const key = activeFolder;
     if (cache.current[key] && !search && !activeCategory) {
       let filtered = cache.current[key];
@@ -72,8 +75,20 @@ export default function Mail() {
   // Keyboard shortcuts
   useEffect(() => {
     const h = (e) => {
-      if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
+      if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.tagName === 'SELECT') return;
       if (showCompose || showSettings) return;
+
+      if (e.key === '?' || (e.shiftKey && e.key === '/')) {
+        e.preventDefault();
+        setShowShortcuts(p => !p);
+        return;
+      }
+
+      if (showShortcuts) {
+        if (e.key === 'Escape') setShowShortcuts(false);
+        return;
+      }
+
       const idx = emails.findIndex(em => em.id === selectedId);
       switch (e.key) {
         case 'j': case 'ArrowDown': e.preventDefault(); if (idx < emails.length - 1) openEmail(emails[idx + 1].id); else if (idx === -1 && emails.length) openEmail(emails[0].id); break;
@@ -90,17 +105,15 @@ export default function Mail() {
     };
     window.addEventListener('keydown', h);
     return () => window.removeEventListener('keydown', h);
-  }, [emails, selectedId, selectedEmail, showCompose, showSettings]);
+  }, [emails, selectedId, selectedEmail, showCompose, showSettings, showShortcuts]);
 
   const openEmail = (id) => {
     setSelectedId(id);
-    // Optimistic read
     setEmails(p => p.map(e => e.id === id ? { ...e, is_read: true } : e));
     api.get(`/api/mail/emails/${id}`).then(d => { setSelectedEmail(d); refreshFolders(); }).catch(() => {});
   };
 
   const handleAction = (id, action, target) => {
-    // Optimistic update
     setEmails(p => {
       let next = p;
       if (action === 'star') next = p.map(e => e.id === id ? { ...e, is_starred: true } : e);
@@ -153,14 +166,16 @@ export default function Mail() {
   const switchLabel = (labelId) => { setActiveFolder('inbox'); setActiveCategory(''); setActiveLabel(labelId === activeLabel ? '' : labelId); setSearch(''); };
 
   return (
-    <div className="h-screen flex overflow-hidden bg-white" data-testid="mail-dashboard">
+    <div className="h-screen flex overflow-hidden bg-[var(--c-bg)]" data-testid="mail-dashboard">
       <Sidebar
         folders={folders} labels={labels} activeFolder={activeFolder} activeLabel={activeLabel}
         onFolderChange={switchFolder} onLabelChange={switchLabel}
         onCompose={() => { setReplyTo(null); setShowCompose(true); }}
         onSettings={() => setShowSettings(true)}
+        collapsed={sidebarCollapsed}
+        onToggleCollapse={() => setSidebarCollapsed(p => !p)}
       />
-      <div className="flex-1 flex border-s border-slate-200 overflow-hidden">
+      <div className="flex-1 flex border-s border-[var(--c-border)] overflow-hidden">
         <EmailList
           emails={emails} selectedId={selectedId} selectedIds={selectedIds}
           search={search} onSearchChange={setSearch} onSelect={openEmail}
@@ -169,12 +184,46 @@ export default function Mail() {
           onCategoryChange={setActiveCategory} onBulkAction={handleBulkAction}
           onAction={handleAction}
         />
-        <div className="flex-1 border-s border-slate-200 overflow-hidden">
+        <div className="flex-1 border-s border-[var(--c-border)] overflow-hidden">
           <EmailView email={selectedEmail} labels={labels} onReply={handleReply} onAction={handleAction} onDelete={handleDelete} />
         </div>
       </div>
       {showCompose && <ComposeModal onClose={() => { setShowCompose(false); setReplyTo(null); }} onSend={handleCompose} replyTo={replyTo} />}
-      {showSettings && <Settings onClose={() => setShowSettings(false)} />}
+      {showSettings && <Settings onClose={() => setShowSettings(false)} labels={labels} onLabelsChange={refreshLabels} />}
+      {showShortcuts && <ShortcutsOverlay onClose={() => setShowShortcuts(false)} t={t} />}
+    </div>
+  );
+}
+
+const SHORTCUT_LIST = [
+  ['j / k', 'kb_navigate'], ['Enter', 'kb_open'], ['s', 'kb_star'],
+  ['e', 'kb_archive'], ['#', 'kb_delete'], ['r', 'kb_reply'],
+  ['c', 'kb_compose'], ['/', 'kb_search'], ['x', 'kb_select'],
+  ['Esc', 'kb_esc'], ['?', 'kb_shortcuts_hint'],
+];
+
+function ShortcutsOverlay({ onClose, t }) {
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" onClick={onClose} data-testid="shortcuts-overlay">
+      <div className="bg-[var(--c-bg)] rounded-xl shadow-2xl w-[420px] overflow-hidden" onClick={e => e.stopPropagation()}>
+        <div className="flex items-center justify-between px-5 py-3 border-b border-[var(--c-border)]">
+          <h2 className="font-heading text-lg font-bold text-[var(--c-text)]">{t('kb_title')}</h2>
+          <button onClick={onClose} className="p-1 text-[var(--c-text2)] hover:text-[var(--c-text)]" data-testid="shortcuts-close">
+            <X className="w-5 h-5" />
+          </button>
+        </div>
+        <div className="p-5 space-y-1 max-h-[60vh] overflow-y-auto">
+          {SHORTCUT_LIST.map(([key, desc]) => (
+            <div key={key} className="flex items-center justify-between py-2 border-b border-[var(--c-border)]/40">
+              <span className="text-sm text-[var(--c-text)]">{t(desc)}</span>
+              <kbd className="text-xs">{key}</kbd>
+            </div>
+          ))}
+        </div>
+        <div className="px-5 py-3 border-t border-[var(--c-border)] bg-[var(--c-bg2)]">
+          <p className="text-xs text-[var(--c-text3)] text-center">Press <kbd className="text-xs">?</kbd> or <kbd className="text-xs">Esc</kbd> to close</p>
+        </div>
+      </div>
     </div>
   );
 }

@@ -2,13 +2,50 @@
 @tailwind components;
 @tailwind utilities;
 
+:root {
+  --c-bg: #FFFFFF;
+  --c-bg2: #F8FAFC;
+  --c-bg3: #F1F5F9;
+  --c-text: #0F172A;
+  --c-text2: #64748B;
+  --c-text3: #94A3B8;
+  --c-border: #E2E8F0;
+  --c-border2: #CBD5E1;
+  --c-accent: #1E3A8A;
+  --c-accent-hover: #1E40AF;
+  --c-accent-light: #DBEAFE;
+  --c-danger: #EF4444;
+  --c-star: #F59E0B;
+  --c-success: #22C55E;
+  --c-selection: #DBEAFE;
+}
+
+[data-theme="dark"] {
+  --c-bg: #0F172A;
+  --c-bg2: #1E293B;
+  --c-bg3: #334155;
+  --c-text: #F1F5F9;
+  --c-text2: #94A3B8;
+  --c-text3: #64748B;
+  --c-border: #334155;
+  --c-border2: #475569;
+  --c-accent: #3B82F6;
+  --c-accent-hover: #2563EB;
+  --c-accent-light: #1E3A5F;
+  --c-danger: #F87171;
+  --c-star: #FBBF24;
+  --c-success: #4ADE80;
+  --c-selection: #1E3A5F;
+}
+
 * { margin: 0; padding: 0; box-sizing: border-box; }
 html, body, #root { height: 100%; overflow: hidden; }
 body {
   font-family: 'DM Sans', sans-serif;
-  color: #0F172A;
-  background: #FFF;
+  color: var(--c-text);
+  background: var(--c-bg);
   -webkit-font-smoothing: antialiased;
+  transition: background-color 0.2s, color 0.2s;
 }
 body[data-font="dm-sans"] { font-family: 'DM Sans', sans-serif; }
 body[data-font="manrope"] { font-family: 'Manrope', sans-serif; }
@@ -18,8 +55,8 @@ h1,h2,h3,h4,h5,h6 { font-family: 'Manrope', sans-serif; }
 
 ::-webkit-scrollbar { width: 5px; }
 ::-webkit-scrollbar-track { background: transparent; }
-::-webkit-scrollbar-thumb { background: #CBD5E1; border-radius: 3px; }
+::-webkit-scrollbar-thumb { background: var(--c-border2); border-radius: 3px; }
 
-kbd { display: inline-block; padding: 1px 5px; font-size: 0.65rem; font-family: monospace; background: #F1F5F9; border: 1px solid #CBD5E1; border-radius: 3px; box-shadow: 0 1px 0 #CBD5E1; }
+kbd { display: inline-block; padding: 1px 5px; font-size: 0.65rem; font-family: monospace; background: var(--c-bg3); border: 1px solid var(--c-border2); border-radius: 3px; box-shadow: 0 1px 0 var(--c-border2); color: var(--c-text); }
 
-::selection { background: #DBEAFE; }
+::selection { background: var(--c-selection); }

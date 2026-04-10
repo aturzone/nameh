@@ -23,6 +23,10 @@ function App() {
   const dismissToast = useCallback((id) => setToasts(p => p.filter(t => t.id !== id)), []);
 
   useEffect(() => {
+    // Apply saved theme on app load
+    const savedTheme = localStorage.getItem('nameh_theme');
+    if (savedTheme) document.documentElement.setAttribute('data-theme', savedTheme);
+
     const tk = localStorage.getItem('nameh_token');
     if (tk) {
       api.setToken(tk);
@@ -31,7 +35,7 @@ function App() {
   }, []);
 
   if (loading) return (
-    <div className="h-screen flex items-center justify-center"><div className="w-6 h-6 border-2 border-blue-800 border-t-transparent rounded-full animate-spin" /></div>
+    <div className="h-screen flex items-center justify-center bg-[var(--c-bg)]"><div className="w-6 h-6 border-2 border-[var(--c-accent)] border-t-transparent rounded-full animate-spin" /></div>
   );
 
   return (

@@ -85,7 +85,16 @@ const en = {
   keyboard_shortcuts: 'Keyboard shortcuts',
   theme: 'Theme',
   light: 'Light',
+  dark: 'Dark',
   close: 'Close',
+  labels_tab: 'Labels',
+  add_label: 'Add label',
+  label_name: 'Label name',
+  delete_label: 'Delete',
+  edit_label: 'Edit',
+  no_labels: 'No labels yet',
+  label_color: 'Color',
+  appearance: 'Appearance',
 
   // Keyboard
   kb_title: 'Keyboard Shortcuts',
@@ -99,6 +108,7 @@ const en = {
   kb_search: 'Search',
   kb_select: 'Select/Deselect',
   kb_esc: 'Close / Go back',
+  kb_shortcuts_hint: 'Press ? for keyboard shortcuts',
 
   // Time
   now: 'now',

@@ -29,10 +29,10 @@ export default function Auth() {
 
   return (
     <div className="h-screen flex" data-testid="auth-page">
-      <div className="hidden lg:flex lg:w-[48%] relative overflow-hidden bg-gradient-to-br from-blue-900 via-blue-800 to-indigo-900 items-center justify-center">
+      <div className="hidden lg:flex lg:w-[48%] relative overflow-hidden bg-gradient-to-br from-[#1E3A8A] via-[#1E40AF] to-[#312E81] items-center justify-center">
         <div className="absolute inset-0 opacity-10" style={{ backgroundImage: 'radial-gradient(circle at 1px 1px, white 1px, transparent 0)', backgroundSize: '24px 24px' }} />
         <div className="relative z-10 text-center px-14">
-          <Logo size={64} className="mx-auto mb-6 [&_path]:fill-white [&_path]:stroke-white/30" />
+          <Logo size={64} color="white" className="mx-auto mb-6" />
           <h1 className="font-heading text-4xl font-extrabold text-white tracking-tight">nameh.me</h1>
           <p className="mt-3 text-lg text-blue-200">{t('email_reimagined')}</p>
           <div className="mt-10 grid grid-cols-3 gap-3 text-white/70 text-xs">
@@ -43,14 +43,14 @@ export default function Auth() {
         </div>
       </div>
 
-      <div className="flex-1 flex items-center justify-center p-8 bg-white">
+      <div className="flex-1 flex items-center justify-center p-8 bg-[var(--c-bg)]">
         <div className="w-full max-w-sm">
           <div className="lg:hidden flex items-center gap-2.5 mb-10 justify-center">
             <Logo size={32} />
-            <h1 className="font-heading text-2xl font-extrabold tracking-tight text-slate-900">nameh.me</h1>
+            <h1 className="font-heading text-2xl font-extrabold tracking-tight text-[var(--c-text)]">nameh.me</h1>
           </div>
-          <h2 className="text-2xl font-heading font-bold text-slate-900 mb-1">{isLogin ? t('welcome_back') : t('get_started')}</h2>
-          <p className="text-sm text-slate-500 mb-6">{isLogin ? t('sign_in') : t('create_account')}</p>
+          <h2 className="text-2xl font-heading font-bold text-[var(--c-text)] mb-1">{isLogin ? t('welcome_back') : t('get_started')}</h2>
+          <p className="text-sm text-[var(--c-text2)] mb-6">{isLogin ? t('sign_in') : t('create_account')}</p>
 
           {error && <div data-testid="auth-error" className="mb-4 p-3 bg-red-50 border border-red-200 text-red-700 text-sm rounded-lg">{error}</div>}
 
