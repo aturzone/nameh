@@ -27,6 +27,11 @@ Build a world-class, self-hosted email platform capable of serving 1 million+ us
 - [x] JMAP proxy to Stalwart
 - [x] Mail status endpoint
 - [x] Domain listing
+- [x] Alembic database migrations
+- [x] Email CRUD (list, view, compose, delete)
+- [x] Email actions (star, read/unread, trash, spam, move)
+- [x] Folder management with unread counts
+- [x] Email search
 
 ## Phase 2: Backend Hardening (Next)
 - [ ] Alembic database migrations
@@ -38,15 +43,21 @@ Build a world-class, self-hosted email platform capable of serving 1 million+ us
 - [ ] Audit logging
 - [ ] Stalwart account sync (background jobs)
 
-## Phase 3: React Frontend
-- [ ] Authentication UI (register, login, password reset)
-- [ ] Inbox / Mailbox view (JMAP-based)
-- [ ] Compose / Reply / Forward
+## Phase 3: React Frontend (Completed)
+- [x] Authentication UI (register, login)
+- [x] Inbox / Mailbox view (3-column layout)
+- [x] Email reading pane with action bar
+- [x] Compose / Reply / Forward modal
+- [x] Folder navigation (inbox, sent, drafts, trash, spam)
+- [x] Email search
+- [x] RTL / Persian language support toggle
+- [x] Unread indicators, star/flag, attachment icons
+- [x] Swiss & High-Contrast design (Manrope + IBM Plex Sans)
 - [ ] Contact management
-- [ ] Settings panel
-- [ ] RTL / Persian language support
+- [ ] Settings panel (expanded)
 - [ ] Mobile responsive design
-- [ ] Dark / Light theme
+- [ ] Dark / Light theme toggle
+- [ ] Password reset flow
 
 ## Phase 4: Production Readiness
 - [ ] Let's Encrypt TLS automation (nameh.me domain)

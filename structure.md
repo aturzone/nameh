@@ -39,8 +39,29 @@ nameh/
 |   |       |-- __init__.py
 |   |       |-- security.py       # Password hashing, JWT, auth deps
 |
-|-- frontend/                     # React app (placeholder)
-|   |-- README.md
+|-- frontend/                     # React Email Client
+|   |-- Dockerfile
+|   |-- package.json
+|   |-- nginx.conf                # Production Nginx config
+|   |-- tailwind.config.js
+|   |-- postcss.config.js
+|   |-- .env
+|   |-- public/
+|   |   |-- index.html
+|   |-- src/
+|   |   |-- index.js
+|   |   |-- index.css
+|   |   |-- App.js                # Router + auth context
+|   |   |-- pages/
+|   |   |   |-- Auth.jsx          # Login / Register page
+|   |   |   |-- Mail.jsx          # 3-column mail dashboard
+|   |   |-- components/
+|   |   |   |-- Sidebar.jsx       # Folder nav + compose + RTL toggle
+|   |   |   |-- EmailList.jsx     # Email list with search
+|   |   |   |-- EmailView.jsx     # Reading pane + action bar
+|   |   |   |-- ComposeModal.jsx  # Compose / reply / forward
+|   |   |-- services/
+|   |       |-- api.js            # API client with JWT auth
 |
 |-- infrastructure/               # Service configurations
 |   |-- stalwart/
