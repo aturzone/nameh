@@ -15,16 +15,16 @@ Build a production-grade, Docker Compose-based email platform (Nameh.me) for 1M+
 - **Webmail**: Roundcube (reference)
 - **Monitoring**: Prometheus + Grafana + Redis Exporter + PostgreSQL Exporter
 
-## What's Been Implemented (Jan 2026)
+## What's Been Implemented
 
-### Infrastructure
+### Infrastructure (Jan 2026)
 - Docker Compose: 17 services, 10 volumes, 1 network
 - Automated setup (setup.sh), Makefile (13+ targets), health checks
 - Stalwart with external PostgreSQL + MinIO + Redis
 - Traefik reverse proxy with ACME/Let's Encrypt
 - Prometheus + Grafana monitoring with exporters
 
-### Backend API (15+ endpoints)
+### Backend API — 15+ endpoints (MOCKED: in-memory storage)
 - JWT auth (register/login), user profiles
 - Email CRUD (list, view, compose, delete)
 - Email actions (star, read/unread, trash, spam, move, label)
@@ -36,20 +36,22 @@ Build a production-grade, Docker Compose-based email platform (Nameh.me) for 1M+
 - Email search, JMAP proxy, mail status
 - Alembic database migrations
 
-### React Frontend (Gmail-level)
-- Custom SVG logo + consistent brand
+### React Frontend — Gmail-level (Apr 2026 - Verified)
+- Clean SVG envelope logo without background/box
 - 3-column layout (sidebar, email list, reading pane)
 - Category tabs (Inbox/Primary/Social/Promotions/Updates)
 - Checkboxes + bulk action bar
 - Hover actions (archive, trash) on email rows
 - Star/flag toggle, unread indicators
-- Compose/Reply/Forward modal with minimize
-- Labels with colored tags on emails
+- Compose/Reply/Forward modal
+- Labels with colored dots in sidebar + badge tags in email view
+- Label click filtering working correctly
 - Settings panel (language, font, signature)
 - Keyboard shortcuts (j/k, c, r, e, #, /, s, Esc)
-- Toast notifications with undo
+- Toast notifications
 - Quick reply button in reading pane
 - Colored sender avatars
+- No artificial delays — instant performance
 
 ### i18n (Full Translation)
 - Complete English translation (90+ keys)
@@ -58,10 +60,11 @@ Build a production-grade, Docker Compose-based email platform (Nameh.me) for 1M+
 - Language persistence in settings
 - Vazirmatn font for Persian, DM Sans for English
 
-## Testing Results (3 iterations)
+## Testing Results (4 iterations)
 - Iteration 1: Infrastructure validation 100% (20/20)
 - Iteration 2: Basic features 100% (19/19 backend + all frontend)
-- Iteration 3: Full V2 100% (backend 100%, frontend 100%, integration 100%, performance 100%, i18n 100%)
+- Iteration 3: Full V2 100% (backend, frontend, integration, performance, i18n)
+- Iteration 4: Comprehensive retest 100% (21/21 backend + all frontend features)
 
 ## Prioritized Backlog
 
@@ -71,6 +74,7 @@ Build a production-grade, Docker Compose-based email platform (Nameh.me) for 1M+
 - [ ] End-to-end email with real Stalwart
 
 ### P1 (Important)
+- [ ] Wire frontend API calls to real FastAPI backend (replace in-memory mocks with PostgreSQL)
 - [ ] Dark mode theme
 - [ ] Contact management
 - [ ] Password reset flow
@@ -78,6 +82,7 @@ Build a production-grade, Docker Compose-based email platform (Nameh.me) for 1M+
 - [ ] Attachment upload
 - [ ] Rate limiting
 - [ ] Admin panel
+- [ ] Comprehensive 3-path testing (UI/UX, E2E, Performance under pressure)
 
 ### P2 (Enhancement)
 - [ ] Mobile responsive
