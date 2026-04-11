@@ -83,4 +83,10 @@ data = "data"
 blob = "blob"
 lookup = "lookup"
 fts = "data"
-directory = "internal"
+directory = "data"
+
+# ── Directory ──────────────────────────────────────────────────
+
+[directory."data"]
+type = "sql"
+store = "data"

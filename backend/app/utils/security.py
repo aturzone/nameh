@@ -4,9 +4,13 @@ from datetime import datetime, timedelta, timezone
 from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from jose import JWTError, jwt
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
 from passlib.context import CryptContext
 
 from app.config import settings
+from app.database import get_db
+from app.models.user import User
 
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 bearer_scheme = HTTPBearer()
@@ -33,15 +37,22 @@ def decode_token(token: str) -> dict:
 
 async def get_current_user(
     credentials: HTTPAuthorizationCredentials = Depends(bearer_scheme),
-) -> dict:
+    db: AsyncSession = Depends(get_db)
+) -> User:
     try:
         payload = decode_token(credentials.credentials)
         user_id = payload.get("sub")
-        username = payload.get("username")
         if not user_id:
             raise HTTPException(status_code=401, detail="Invalid token")
-        return {"user_id": uuid.UUID(user_id), "username": username}
-    except JWTError:
+
+        result = await db.execute(select(User).where(User.id == uuid.UUID(user_id)))
+        user = result.scalar_one_or_none()
+
+        if not user:
+             raise HTTPException(status_code=404, detail="User not found")
+
+        return user
+    except (JWTError, ValueError):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Could not validate credentials",

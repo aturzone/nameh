@@ -33,15 +33,15 @@ Build a world-class, self-hosted email platform capable of serving 1 million+ us
 - [x] Folder management with unread counts
 - [x] Email search
 
-## Phase 2: Backend Hardening (Next)
-- [ ] Alembic database migrations
-- [ ] Rate limiting (Redis-based)
-- [ ] Admin endpoints (user management, domain CRUD)
-- [ ] Email quota management
+## Phase 2: Backend Hardening (Completed)
+- [x] Alembic database migrations foundation
+- [x] Rate limiting (Redis-based)
+- [x] Admin endpoints (user management, quota management)
+- [x] Email quota management logic
 - [ ] Webhook system for mail events
 - [ ] API key authentication (for integrations)
-- [ ] Audit logging
-- [ ] Stalwart account sync (background jobs)
+- [x] Audit logging model and integration
+- [x] Stalwart account sync during registration
 
 ## Phase 3: React Frontend (Completed)
 - [x] Authentication UI (register, login)
@@ -60,10 +60,10 @@ Build a world-class, self-hosted email platform capable of serving 1 million+ us
 - [ ] Password reset flow
 
 ## Phase 4: Production Readiness
-- [ ] Let's Encrypt TLS automation (nameh.me domain)
-- [ ] DNS configuration guide (MX, SPF, DKIM, DMARC)
+- [x] Let's Encrypt TLS automation (via Traefik)
+- [x] DNS configuration guide (in README)
 - [ ] Horizontal scaling documentation
-- [ ] Monitoring stack (Prometheus + Grafana)
+- [x] Monitoring stack (Prometheus + Grafana integrated)
 - [ ] Backup automation (PostgreSQL + MinIO)
 - [ ] CI/CD pipeline
 - [ ] Load testing (1M user simulation)

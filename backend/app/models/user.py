@@ -29,3 +29,7 @@ class User(Base):
         default=lambda: datetime.now(timezone.utc),
         onupdate=lambda: datetime.now(timezone.utc),
     )
+
+    # Quota management (in bytes)
+    quota_limit: Mapped[int] = mapped_column(default=1024 * 1024 * 1024) # 1GB Default
+    quota_used: Mapped[int] = mapped_column(default=0)
