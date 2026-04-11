@@ -9,6 +9,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 
 from app.database import Base
 from app.models.user import User  # noqa: F401
+from app.models.audit import AuditLog  # noqa: F401
 
 config = context.config
 

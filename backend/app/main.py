@@ -5,13 +5,14 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.config import settings
 from app.database import engine, Base
-from app.routes import health, auth, users, mail
+from app.routes import health, auth, users, mail, admin
 
 
 @asynccontextmanager
 async def lifespan(application: FastAPI):
-    async with engine.begin() as conn:
-        await conn.run_sync(Base.metadata.create_all)
+    if settings.environment != "test":
+        async with engine.begin() as conn:
+            await conn.run_sync(Base.metadata.create_all)
     yield
     await engine.dispose()
 
@@ -38,3 +39,4 @@ app.include_router(health.router, prefix="/api")
 app.include_router(auth.router, prefix="/api/auth", tags=["Authentication"])
 app.include_router(users.router, prefix="/api/users", tags=["Users"])
 app.include_router(mail.router, prefix="/api/mail", tags=["Mail"])
+app.include_router(admin.router, prefix="/api/admin", tags=["Admin"])

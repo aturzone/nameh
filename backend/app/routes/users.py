@@ -25,15 +25,17 @@ class UpdateProfileRequest(BaseModel):
     display_name: str | None = None
 
 
+class UserSettings(BaseModel):
+    language: str = "en"
+    font: str = "dm-sans"
+    theme: str = "light"
+    signature: str = ""
+
+
 @router.get("/me", response_model=UserProfile)
 async def get_profile(
-    current_user: dict = Depends(get_current_user),
-    db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user),
 ):
-    result = await db.execute(select(User).where(User.id == current_user["user_id"]))
-    user = result.scalar_one_or_none()
-    if not user:
-        raise HTTPException(status_code=404, detail="User not found")
     return UserProfile(
         id=str(user.id),
         email=user.email,
@@ -46,17 +48,29 @@ async def get_profile(
     )
 
 
+@router.get("/settings", response_model=UserSettings)
+async def get_settings(user: User = Depends(get_current_user)):
+    # In a real app, these would be in the DB. For now, returning defaults or from user model if we add them.
+    return UserSettings(
+        language="en",
+        font="dm-sans",
+        theme="light",
+        signature=""
+    )
+
+
+@router.patch("/settings", response_model=UserSettings)
+async def update_settings(body: UserSettings, user: User = Depends(get_current_user)):
+    # Mock update for now to satisfy frontend
+    return body
+
+
 @router.patch("/me", response_model=UserProfile)
 async def update_profile(
     body: UpdateProfileRequest,
-    current_user: dict = Depends(get_current_user),
+    user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    result = await db.execute(select(User).where(User.id == current_user["user_id"]))
-    user = result.scalar_one_or_none()
-    if not user:
-        raise HTTPException(status_code=404, detail="User not found")
-
     if body.display_name is not None:
         user.display_name = body.display_name
 
